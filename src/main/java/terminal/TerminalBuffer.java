@@ -93,6 +93,35 @@ public final class TerminalBuffer {
         }
     }
 
+    public void insertText(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            TerminalCell overflow = screenLine(cursorRow).insertAt(cursorCol, ch, currentStyle);
+            if (cursorCol < width - 1) cursorCol++;
+
+            if (overflow != null && overflow.ch != null && autoWrap) {
+                // overflow wraps to next line
+                if (cursorRow < height - 1) {
+                    screenLine(cursorRow + 1).insertAt(0, overflow.ch, overflow.style);
+                } else {
+                    // last row with autoWrap: scroll then place overflow
+                    insertEmptyLineAtBottom();
+                    screenLine(height - 1).insertAt(0, overflow.ch, overflow.style);
+                }
+            }
+            // autoWrap=false: overflow silently lost
+        }
+    }
+
+    public void fillLine(int row, Character ch) {
+        fillLine(row, ch, currentStyle);
+    }
+
+    public void fillLine(int row, Character ch, TextStyle style) {
+        if (row < 0 || row >= height) return;
+        screenLine(row).fill(ch, style);
+    }
+
     public void insertEmptyLineAtBottom() {
         // top screen line → scrollback
         TerminalLine topLine = screen.removeFirst();
@@ -106,6 +135,16 @@ public final class TerminalBuffer {
     public Character getCharAt(int col, int row) {
         if (col < 0 || col >= width || row < 0 || row >= height) return null;
         return screenLine(row).cells[col].ch;
+    }
+
+    public TextStyle getAttributesAt(int col, int row) {
+        if (col < 0 || col >= width || row < 0 || row >= height) return new TextStyle();
+        return screenLine(row).cells[col].style;
+    }
+
+    public TerminalCell getCellAt(int col, int row) {
+        if (col < 0 || col >= width || row < 0 || row >= height) return TerminalCell.empty();
+        return screenLine(row).cells[col];
     }
 
     public int getScreenHeight() { return height; }

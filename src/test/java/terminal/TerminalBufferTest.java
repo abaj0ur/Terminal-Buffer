@@ -395,4 +395,85 @@ class TerminalBufferTest {
             assertNull(buf.getCharAt(0, 0));
         }
     }
+
+    @Nested
+    class ContentAccess {
+        @Test
+        void getCharAtValidPosition() {
+            buf.writeText("AB");
+            assertEquals('A', buf.getCharAt(0, 0));
+            assertEquals('B', buf.getCharAt(1, 0));
+        }
+
+        @Test
+        void getCharAtOutOfBoundsReturnsNull() {
+            assertNull(buf.getCharAt(-1, 0));
+            assertNull(buf.getCharAt(5, 0));
+            assertNull(buf.getCharAt(0, -1));
+            assertNull(buf.getCharAt(0, 3));
+        }
+
+        @Test
+        void getAttributesAtOutOfBoundsReturnsDefault() {
+            assertEquals(new TextStyle(), buf.getAttributesAt(-1, 0));
+            assertEquals(new TextStyle(), buf.getAttributesAt(0, 99));
+        }
+
+        @Test
+        void getLineAsStringTrimsByDefault() {
+            buf.writeText("AB");
+            String line = buf.getLineAsString(0);
+            assertEquals("AB", line); // trailing 3 spaces trimmed
+        }
+
+        @Test
+        void getLineAsStringRawPreservesWidth() {
+            buf.writeText("AB");
+            String line = buf.getLineAsString(0, false);
+            assertEquals(5, line.length()); // full width
+        }
+
+        @Test
+        void getLineAsStringEmptyLineIsEmpty() {
+            assertEquals("", buf.getLineAsString(0));
+        }
+
+        @Test
+        void getScreenContent() {
+            buf.writeText("AB");
+            String content = buf.getScreenContent();
+            assertTrue(content.startsWith("AB"));
+            // 3 lines joined with \n
+            assertEquals(2, content.chars().filter(c -> c == '\n').count());
+        }
+
+        @Test
+        void getScrollbackRowZeroIsOldest() {
+            // push two lines: "AAAAA" then "BBBBB"
+            buf.fillLine(0, 'A');
+            buf.insertEmptyLineAtBottom(); // "AAAAA" → scrollback[0] (oldest)
+            buf.fillLine(0, 'B');
+            buf.insertEmptyLineAtBottom(); // "BBBBB" → scrollback[1]
+            assertEquals('A', buf.getCharAtScrollback(0, 0)); // oldest
+            assertEquals('B', buf.getCharAtScrollback(0, 1)); // newer
+        }
+
+        @Test
+        void getScrollbackOutOfBoundsReturnsNull() {
+            assertNull(buf.getCharAtScrollback(0, -1));
+            assertNull(buf.getCharAtScrollback(0, 99));
+        }
+
+        @Test
+        void getScreenAndScrollbackContentScrollbackFirst() {
+            buf.fillLine(0, 'A');
+            buf.insertEmptyLineAtBottom();
+            buf.fillLine(0, 'B'); // screen row 0 = B
+            String content = buf.getScreenAndScrollbackContent();
+            // scrollback line (AAAAA) comes before screen lines
+            int idxA = content.indexOf('A');
+            int idxB = content.indexOf('B');
+            assertTrue(idxA < idxB, "scrollback (A) should appear before screen (B)");
+        }
+    }
 }

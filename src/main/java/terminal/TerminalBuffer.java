@@ -160,6 +160,26 @@ public final class TerminalBuffer {
         return screenLine(row).cells[col];
     }
 
+    public String getLineAsString(int row) {
+        return getLineAsString(row, true);
+    }
+
+    public String getLineAsString(int row, boolean trim) {
+        if (row < 0 || row >= height) return "";
+        return lineToString(screenLine(row), trim);
+    }
+
+    public String getScreenContent() {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (TerminalLine line : screen) {
+            if (!first) sb.append('\n');
+            sb.append(lineToString(line, true));
+            first = false;
+        }
+        return sb.toString();
+    }
+
     public Character getCharAtScrollback(int col, int scrollbackRow) {
         if (col < 0 || col >= width) return null;
         TerminalLine line = scrollbackLine(scrollbackRow);
@@ -172,6 +192,32 @@ public final class TerminalBuffer {
         TerminalLine line = scrollbackLine(scrollbackRow);
         if (line == null) return new TextStyle();
         return line.cells[col].style;
+    }
+
+    public String getLineAsStringScrollback(int scrollbackRow) {
+        return getLineAsStringScrollback(scrollbackRow, true);
+    }
+
+    public String getLineAsStringScrollback(int scrollbackRow, boolean trim) {
+        TerminalLine line = scrollbackLine(scrollbackRow);
+        if (line == null) return "";
+        return lineToString(line, trim);
+    }
+
+    public String getScreenAndScrollbackContent() {
+        StringBuilder sb = new StringBuilder();
+        // scrollback oldest-first
+        for (TerminalLine line : scrollback) {
+            sb.append(lineToString(line, true)).append('\n');
+        }
+        // then screen
+        boolean first = true;
+        for (TerminalLine line : screen) {
+            if (!first) sb.append('\n');
+            sb.append(lineToString(line, true));
+            first = false;
+        }
+        return sb.toString();
     }
 
     public int getScreenHeight() { return height; }
@@ -234,6 +280,24 @@ public final class TerminalBuffer {
             if (i++ == index) return line;
         }
         return null;
+    }
+
+    private String lineToString(TerminalLine line, boolean trim) {
+        StringBuilder sb = new StringBuilder(width);
+        for (TerminalCell cell : line.cells) {
+            if (cell.isWidePlaceholder) {
+                // placeholder never serialized; in raw mode insert space to preserve column count
+                if (!trim) sb.append(' ');
+                continue;
+            }
+            sb.append(cell.ch != null ? cell.ch : ' ');
+        }
+        if (trim) {
+            int end = sb.length();
+            while (end > 0 && sb.charAt(end - 1) == ' ') end--;
+            return sb.substring(0, end);
+        }
+        return sb.toString();
     }
 
     private static int clamp(int value, int min, int max) {

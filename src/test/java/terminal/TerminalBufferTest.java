@@ -317,4 +317,82 @@ class TerminalBufferTest {
             assertEquals(TextColor.RED, buf.getAttributesAt(0, 0).fg);
         }
     }
+
+    @Nested
+    class ScreenOperations {
+        @Test
+        void insertEmptyLineAddsScrollbackEntry() {
+            buf.writeText("HELLO");
+            buf.insertEmptyLineAtBottom();
+            assertEquals(1, buf.getScrollbackSize());
+        }
+
+        @Test
+        void insertEmptyLineBottomIsEmpty() {
+            buf.writeText("HELLO");
+            buf.insertEmptyLineAtBottom();
+            for (int col = 0; col < 5; col++)
+                assertNull(buf.getCharAt(col, 2)); // last row is new empty line
+        }
+
+        @Test
+        void insertEmptyLineScrollbackOrderOldestFirst() {
+            buf.writeText("AAAAA"); // row 0 = "AAAAA", cursor=(4,0), wrapPending=true
+            buf.insertEmptyLineAtBottom(); // AAAAA → scrollback[0]; screen=[row1,row2,new_empty]
+            // cursor still at (4,0) → wrapPending resolves to row 1 on next write
+            buf.writeText("BBBBB"); // resolveWrap→row1; writes BBBBB there
+            assertEquals('A', buf.getCharAtScrollback(0, 0)); // oldest = AAAAA
+        }
+
+        @Test
+        void insertEmptyLineDropsOldestWhenScrollbackFull() {
+            TerminalBuffer small = new TerminalBuffer(5, 2, 2); // scrollback max=2
+            small.insertEmptyLineAtBottom(); // scrollback[0] = empty
+            small.insertEmptyLineAtBottom(); // scrollback[1] = empty; scrollback now full
+            small.writeText("ZZZZZ");
+            small.insertEmptyLineAtBottom(); // oldest dropped; scrollback still size 2
+            assertEquals(2, small.getScrollbackSize());
+        }
+
+        @Test
+        void clearScreenEmptiesCells() {
+            buf.writeText("ABCDE");
+            buf.clearScreen();
+            for (int col = 0; col < 5; col++)
+                assertNull(buf.getCharAt(col, 0));
+        }
+
+        @Test
+        void clearScreenPreservesCursor() {
+            buf.setCursor(3, 2);
+            buf.clearScreen();
+            assertEquals(3, buf.getCursorCol());
+            assertEquals(2, buf.getCursorRow());
+        }
+
+        @Test
+        void clearScreenResetsWrapPending() {
+            buf.writeText("AAAAA");
+            assertTrue(buf.isWrapPending());
+            buf.clearScreen();
+            assertFalse(buf.isWrapPending());
+        }
+
+        @Test
+        void clearScreenDoesNotTouchScrollback() {
+            buf.insertEmptyLineAtBottom();
+            int sizeBefore = buf.getScrollbackSize();
+            buf.clearScreen();
+            assertEquals(sizeBefore, buf.getScrollbackSize());
+        }
+
+        @Test
+        void clearScreenAndScrollbackClearsBoth() {
+            buf.insertEmptyLineAtBottom();
+            buf.writeText("ABCDE");
+            buf.clearScreenAndScrollback();
+            assertEquals(0, buf.getScrollbackSize());
+            assertNull(buf.getCharAt(0, 0));
+        }
+    }
 }

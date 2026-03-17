@@ -132,6 +132,19 @@ public final class TerminalBuffer {
         screen.addLast(new TerminalLine(width));
     }
 
+    public void clearScreen() {
+        for (TerminalLine line : screen) {
+            line.fill(null, currentStyle);
+        }
+        wrapPending = false;
+        // cursor preserved
+    }
+
+    public void clearScreenAndScrollback() {
+        clearScreen();
+        scrollback.clear();
+    }
+
     public Character getCharAt(int col, int row) {
         if (col < 0 || col >= width || row < 0 || row >= height) return null;
         return screenLine(row).cells[col].ch;
@@ -145,6 +158,20 @@ public final class TerminalBuffer {
     public TerminalCell getCellAt(int col, int row) {
         if (col < 0 || col >= width || row < 0 || row >= height) return TerminalCell.empty();
         return screenLine(row).cells[col];
+    }
+
+    public Character getCharAtScrollback(int col, int scrollbackRow) {
+        if (col < 0 || col >= width) return null;
+        TerminalLine line = scrollbackLine(scrollbackRow);
+        if (line == null) return null;
+        return line.cells[col].ch;
+    }
+
+    public TextStyle getAttributesAtScrollback(int col, int scrollbackRow) {
+        if (col < 0 || col >= width) return new TextStyle();
+        TerminalLine line = scrollbackLine(scrollbackRow);
+        if (line == null) return new TextStyle();
+        return line.cells[col].style;
     }
 
     public int getScreenHeight() { return height; }
@@ -197,6 +224,16 @@ public final class TerminalBuffer {
             if (i++ == row) return line;
         }
         throw new IndexOutOfBoundsException("screen row " + row);
+    }
+
+    // scrollback: index 0 = oldest (first inserted via addLast)
+    private TerminalLine scrollbackLine(int index) {
+        if (index < 0 || index >= scrollback.size()) return null;
+        int i = 0;
+        for (TerminalLine line : scrollback) {
+            if (i++ == index) return line;
+        }
+        return null;
     }
 
     private static int clamp(int value, int min, int max) {

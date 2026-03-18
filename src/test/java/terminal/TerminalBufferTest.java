@@ -434,6 +434,16 @@ class TerminalBufferTest {
         }
 
         @Test
+        void getLineAsStringRawPreservesWidthWithWideChar() {
+            // wide char occupies 2 visual columns; raw mode must still return width chars
+            buf.writeWideChar('\u4e2d'); // cols 0+1; cursor at 2
+            buf.writeText("ABC");   // cols 2,3,4
+            String raw = buf.getLineAsString(0, false);
+            // raw: '\u4e2d', ' '(placeholder slot), 'A', 'B', 'C' → length 5
+            assertEquals(5, raw.length());
+        }
+
+        @Test
         void getLineAsStringEmptyLineIsEmpty() {
             assertEquals("", buf.getLineAsString(0));
         }
@@ -474,6 +484,68 @@ class TerminalBufferTest {
             int idxA = content.indexOf('A');
             int idxB = content.indexOf('B');
             assertTrue(idxA < idxB, "scrollback (A) should appear before screen (B)");
+        }
+    }
+
+    @Nested
+    class WideChars {
+        @Test
+        void writeWideCharOccupiesTwoCells() {
+            // '\u4e2d' is a CJK wide char (width=2)
+            buf.writeWideChar('\u4e2d');
+            assertEquals('\u4e2d', buf.getCharAt(0, 0));
+            assertNull(buf.getCharAt(1, 0));
+            assertTrue(buf.getCellAt(1, 0).isWidePlaceholder);
+        }
+
+        @Test
+        void writeWideCharAdvancesCursorBy2() {
+            buf.writeWideChar('\u4e2d');
+            assertEquals(2, buf.getCursorCol());
+        }
+
+        @Test
+        void writeWideCharAtSecondToLastCol() {
+            // width=5, write wide char at col 3 → fits: col3=char, col4=placeholder
+            buf.setCursor(3, 0);
+            buf.writeWideChar('\u4e2d');
+            assertEquals('\u4e2d', buf.getCharAt(3, 0));
+            assertTrue(buf.getCellAt(4, 0).isWidePlaceholder);
+            // wrapPending after cursor at 4
+            assertTrue(buf.isWrapPending());
+        }
+
+        @Test
+        void writeWideCharAtLastColWritesSpaceAndWraps() {
+            // insufficient room at col 4 → space, wrapPending
+            buf.setCursor(4, 0);
+            buf.writeWideChar('\u4e2d');
+            // last col filled with space (or left empty), wrapPending set
+            assertTrue(buf.isWrapPending());
+        }
+
+        @Test
+        void moveCursorLeftIntoPlaceholderJumpsToAnchor() {
+            buf.writeWideChar('\u4e2d'); // col 0 = anchor, col 1 = placeholder, cursor at 2
+            buf.moveCursor(TerminalBuffer.Direction.LEFT, 1); // should land on col 0, not col 1
+            assertEquals(0, buf.getCursorCol());
+        }
+
+        @Test
+        void overwriteAnchorClearsPlaceholder() {
+            buf.writeWideChar('\u4e2d'); // cols 0+1
+            buf.setCursor(0, 0);
+            buf.writeText("X");     // overwrite anchor
+            assertFalse(buf.getCellAt(1, 0).isWidePlaceholder); // placeholder cleared
+        }
+
+        @Test
+        void overwritePlaceholderClearsAnchor() {
+            buf.writeWideChar('\u4e2d'); // cols 0+1
+            buf.setCursor(1, 0);
+            buf.writeText("Y");     // overwrite placeholder
+            assertNull(buf.getCharAt(0, 0)); // anchor cleared
+            assertEquals('Y', buf.getCharAt(1, 0));
         }
     }
 }

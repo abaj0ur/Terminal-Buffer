@@ -93,6 +93,33 @@ public final class TerminalBuffer {
         }
     }
 
+    public void writeWideChar(char ch) {
+        resolveWrapIfPending();
+
+        if (cursorCol >= width - 1) {
+            // insufficient room: write space at last col, set wrapPending
+            clearWideCharAt(cursorCol, cursorRow);
+            screenLine(cursorRow).writeAt(cursorCol, ' ', currentStyle);
+            if (autoWrap) wrapPending = true;
+            return;
+        }
+
+        // clear any existing wide pair at both positions
+        clearWideCharAt(cursorCol, cursorRow);
+        clearWideCharAt(cursorCol + 1, cursorRow);
+
+        screenLine(cursorRow).writeAt(cursorCol, ch, currentStyle);
+        screenLine(cursorRow).cells[cursorCol + 1] = TerminalCell.widePlaceholder(currentStyle);
+
+        if (cursorCol + 1 == width - 1) {
+            // placeholder landed at last col
+            cursorCol = width - 1;
+            if (autoWrap) wrapPending = true;
+        } else {
+            cursorCol += 2;
+        }
+    }
+
     public void insertText(String text) {
         for (int i = 0; i < text.length(); i++) {
             char ch = text.charAt(i);
